@@ -210,7 +210,7 @@ state_machine! {
         /// The hold edges must point to nodes in the graph
         #[invariant]
         pub open spec fn hold_nodes_in_graph(&self) -> bool {
-            forall |e: HoldEdge|  #[trigger] self.holds.contains(e) ==> {
+            forall |e: HoldEdge| self.holds.contains(e) ==> {
                 &&& self.domains.contains(e.src())
                 &&& e.dst() is Resource ==> self.resources.contains(e.dst()->res)
                 &&& e.dst() is Space ==> self.spaces.contains(e.dst()->space)
@@ -317,7 +317,8 @@ state_machine! {
         }
 
         pub open spec fn subset_src_are_unique(&self) -> bool {
-            forall |e1, e2: SubsetEdge| self.subsets.contains(e1) && self.subsets.contains(e2) && e1.src() == e2.src() ==> e1.dst() == e2.dst()
+            forall |e1: SubsetEdge, e2: SubsetEdge| 
+                self.subsets.contains(e1) && self.subsets.contains(e2) && e1.src() == e2.src() ==> e1.dst() == e2.dst()
         }
 
         /// The model must have a finite number of request edges
@@ -388,12 +389,14 @@ state_machine! {
                 // The Resource must exist
                 require pre.resources.contains(res);
                 // The Resource must not be the backing resource of a ResourceSpace
-                require forall |me: MapEdge| pre.maps.contains(me) && me.dst() is Resource && me.dst()->res == res ==> me.src() is Resource;
+                //require forall |me: MapEdge| me.dst() is Resource && me.dst()->res == res && me.src() is Space ==> !pre.maps.contains(me);
+                //require forall |me: MapEdge| pre.maps.contains(me) && me.dst() is Resource && me.dst()->res == res ==> me.src() is Resource;
+                let reslike = ResourceLike::Resource { res };
+                require forall |me: MapEdge| pre.maps.contains(me) && me.src() is Space ==> me.dst() != reslike;
 
                 let se = choose |se: SubsetEdge| pre.subsets.contains(se) && se.src() == res;
-                let reslike = ResourceLike::Resource { res };
                 let hold_edge_filter = |he: HoldEdge| -> (bool) { he.dst() != reslike };
-                let map_edge_filter = |me: MapEdge| -> (bool) { me.src() != reslike && me.dst() != reslike };
+                let map_edge_filter  = |me: MapEdge| -> (bool) { me.src() != reslike && me.dst() != reslike };
 
                 update resources = pre.resources.remove(res);
                 update subsets = pre.subsets.remove(se);
@@ -410,7 +413,7 @@ state_machine! {
         #[inductive(create_resource)]
         fn create_resource_inductive(pre: Self, post: Self, res: Resource, space: ResourceSpace, holder: ProtectionDomain)
         {
-            // Invariant hold_edge_to_each_resource
+            // Invariant: hold_edge_to_each_resource
             assert forall |r: Resource| post.resources.contains(r) implies
                 exists |e: HoldEdge| post.holds.contains(e) && e.dst() is Resource && e.dst()->res == r by {
                     let e = if (r == res) {
@@ -443,7 +446,30 @@ state_machine! {
         #[inductive(destroy_resource)]
         fn destroy_resource_inductive(pre: Self, post: Self, res: Resource)
         {
+            // Invariant: hold_edge_to_each_resource
+            assert forall |r: Resource| post.resources.contains(r) implies
+                exists |e: HoldEdge| post.holds.contains(e) && e.dst() is Resource && e.dst()->res == r by {
+                    let e = choose |e| pre.holds.contains(e) && e.dst() is Resource && e.dst()->res == r;
+                    assert(post.holds.contains(e) && e.dst() is Resource && e.dst()->res == r);
+                }
 
+            // Invariant: hold_edge_to_each_space
+            assert forall |s: ResourceSpace| post.spaces.contains(s) implies
+                exists |e: HoldEdge| post.holds.contains(e) && e.dst() is Space && e.dst()->space == s by {
+                    let e = choose |e| pre.holds.contains(e) && e.dst() is Space && e.dst()->space == s;
+                    assert(post.holds.contains(e) && e.dst() is Space && e.dst()->space == s);
+                }
+
+            // Invariant: spaces_are_mapped
+            assert forall |s: ResourceSpace| post.spaces.contains(s) implies
+                exists |e: MapEdge| post.maps.contains(e) && e.src() is Space && e.src()->space == s by {
+                    let reslike = ResourceLike::Resource { res };
+                    let e = choose |e: MapEdge| pre.maps.contains(e) && e.src() is Space && e.src()->space == s;
+                    assert(e.src() != reslike);
+                    assert(e.dst() != reslike);
+                    assert(forall |e: MapEdge| pre.maps.contains(e) && e.src() != reslike && e.dst() != reslike ==> post.maps.contains(e));
+                    assert(post.maps.contains(e) && e.src() is Space && e.src()->space == s);
+                }
         }
 
         // Helper functions:
