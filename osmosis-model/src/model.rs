@@ -6,7 +6,9 @@ use vstd::set::Set;
 verus! {
 
 /// A Protection Domain
-pub ghost struct ProtectionDomain { pub id: nat }
+pub ghost struct ProtectionDomain {
+    pub id: nat,
+}
 
 impl ProtectionDomain {
     pub closed spec fn new(id: nat) -> ProtectionDomain {
@@ -20,9 +22,9 @@ impl ProtectionDomain {
 }
 
 /// A Resource
-pub ghost struct Resource { 
-    pub rtype: ResourceType, 
-    pub val: nat 
+pub ghost struct Resource {
+    pub rtype: ResourceType,
+    pub val: nat,
 }
 
 impl Resource {
@@ -38,9 +40,9 @@ impl Resource {
 }
 
 /// A Resource Space
-pub ghost struct ResourceSpace { 
-    pub rtype: ResourceType, 
-    pub vals: Set<nat> 
+pub ghost struct ResourceSpace {
+    pub rtype: ResourceType,
+    pub vals: Set<nat>,
 }
 
 impl ResourceSpace {
@@ -56,7 +58,10 @@ impl ResourceSpace {
 }
 
 /// A Resource Type
-pub ghost enum ResourceType { Virtual(nat), Physical(nat) }
+pub ghost enum ResourceType {
+    Virtual(nat),
+    Physical(nat),
+}
 
 pub ghost enum ResourceLike {
     Resource { res: Resource },
@@ -71,11 +76,10 @@ impl ResourceLike {
             ResourceLike::Space { space } => space.rtype(),
         }
     }
-
 }
 
 /// A Hold edge
-pub ghost struct HoldEdge { 
+pub ghost struct HoldEdge {
     pub src: ProtectionDomain,
     pub dst: ResourceLike,
 }
@@ -105,9 +109,10 @@ impl MapEdge {
     }
 
     // #[verifier::type_invariant]
-    pub open spec fn well_formed(self) -> bool { 
+    pub open spec fn well_formed(self) -> bool {
         // A Physical Resource(Space), can't map to a Virtual Resource(Space)
-        &&& self.src().rtype() is Physical ==> self.dst().rtype() is Physical
+        &&& self.src().rtype() is Physical
+            ==> self.dst().rtype() is Physical
         // If the src node is a resource then the dst must be a resource
         &&& self.src() is Resource ==> self.dst() is Resource
     }
@@ -129,7 +134,9 @@ impl SubsetEdge {
 
     pub open spec fn well_formed(self) -> bool {
         // The val of the src Resource must be managed by the space that it subsets
-        &&& self.dst().vals().contains(self.src().val())
+        &&& self.dst().vals().contains(
+            self.src().val(),
+        )
         // The src and dst must share a type
         &&& self.src().rtype() == self.dst().rtype()
     }
@@ -204,7 +211,7 @@ state_machine! {
         #[invariant]
         pub open spec fn hold_nodes_in_graph(&self) -> bool {
             forall |e: HoldEdge|  #[trigger] self.holds.contains(e) ==> {
-                &&& self.domains.contains(e.src()) 
+                &&& self.domains.contains(e.src())
                 &&& e.dst() is Resource ==> self.resources.contains(e.dst()->res)
                 &&& e.dst() is Space ==> self.spaces.contains(e.dst()->space)
             }
@@ -213,7 +220,7 @@ state_machine! {
         /// There must be at least one hold edge to each resource in the graph
         #[invariant]
         pub open spec fn hold_edge_to_each_resource(&self) -> bool {
-            forall |r: Resource|   self.resources.contains(r) ==> 
+            forall |r: Resource|   self.resources.contains(r) ==>
                 exists |e: HoldEdge|  self.holds.contains(e) && e.dst() is Resource && e.dst()->res == r
         }
 
@@ -272,7 +279,7 @@ state_machine! {
         /// that it's necessary nor useful.
         #[invariant]
         pub open spec fn physical_spaces_map_to_physical_spaces(&self) -> bool {
-            forall |e: MapEdge| self.maps.contains(e) && e.src().rtype() is Physical ==> e.dst().rtype() is Physical 
+            forall |e: MapEdge| self.maps.contains(e) && e.src().rtype() is Physical ==> e.dst().rtype() is Physical
         }
 
         /// map edges whose source is a resource, must have a resource as a destination.
@@ -305,7 +312,7 @@ state_machine! {
         /// All resource nodes in the graph must be the source in a subset edge
         #[invariant]
         pub open spec fn resources_are_subset(&self) -> bool {
-            forall |r: Resource| self.resources.contains(r) ==> 
+            forall |r: Resource| self.resources.contains(r) ==>
                 exists |e: SubsetEdge| self.subsets.contains(e) && e.src() == r
         }
 
@@ -323,7 +330,7 @@ state_machine! {
         // Initalize:
 
         init! {
-            initialize() 
+            initialize()
             {
                 init domains = Set::empty();
                 init resources = Set::empty();
@@ -339,7 +346,7 @@ state_machine! {
 
         /// Create a new resource node. This is done by subsetting it from a specific resource space
         transition! {
-            create_resource(res: Resource, space: ResourceSpace, holder: ProtectionDomain) 
+            create_resource(res: Resource, space: ResourceSpace, holder: ProtectionDomain)
             {
                 // The Protection Domain must exist
                 require pre.domains.contains(holder);
@@ -348,10 +355,10 @@ state_machine! {
                 // The new Resource must not already exist
                 require !pre.resources.contains(res);
                 // There must be a hold edge from the holder protection domain to the resource space
-                require exists |he: HoldEdge| 
-                    pre.holds.contains(he) 
-                    && he.src() == holder 
-                    && he.dst() is Space 
+                require exists |he: HoldEdge|
+                    pre.holds.contains(he)
+                    && he.src() == holder
+                    && he.dst() is Space
                     && he.dst()->space == space;
                 // The Resource must be of the same type as the Resource Space
                 require res.rtype() == space.rtype();
@@ -387,7 +394,7 @@ state_machine! {
                 let reslike = ResourceLike::Resource { res };
                 let hold_edge_filter = |he: HoldEdge| -> (bool) { he.dst() != reslike };
                 let map_edge_filter = |me: MapEdge| -> (bool) { me.src() != reslike && me.dst() != reslike };
-                
+
                 update resources = pre.resources.remove(res);
                 update subsets = pre.subsets.remove(se);
                 update holds = pre.holds.filter(hold_edge_filter);
@@ -396,12 +403,12 @@ state_machine! {
         }
 
         // Inductiveness Proofs:
-        
+
         #[inductive(initialize)]
         fn initialize_inductive(post: Self) { }
-       
+
         #[inductive(create_resource)]
-        fn create_resource_inductive(pre: Self, post: Self, res: Resource, space: ResourceSpace, holder: ProtectionDomain) 
+        fn create_resource_inductive(pre: Self, post: Self, res: Resource, space: ResourceSpace, holder: ProtectionDomain)
         {
             // Invariant hold_edge_to_each_resource
             assert forall |r: Resource| post.resources.contains(r) implies
@@ -409,20 +416,20 @@ state_machine! {
                     let e = if (r == res) {
                         HoldEdge { src: holder, dst: ResourceLike::Resource { res }}
                     } else {
-                        choose |e| pre.holds.contains(e) && e.dst() is Resource && e.dst()->res == r 
+                        choose |e| pre.holds.contains(e) && e.dst() is Resource && e.dst()->res == r
                     };
                     assert(post.holds.contains(e) && e.dst() is Resource && e.dst()->res == r);
                 }
-            
+
             // Invariant: hold_edge_to_each_space
             assert forall |s: ResourceSpace| post.spaces.contains(s) implies
                 exists |e: HoldEdge| post.holds.contains(e) && e.dst() is Space && e.dst()->space == s by {
                     let e = choose |e| pre.holds.contains(e) && e.dst() is Space && e.dst()->space == s;
                     assert(post.holds.contains(e) && e.dst() is Space && e.dst()->space == s);
                 }
-            
+
             // Invariant: resources_are_subsets
-            assert forall |r: Resource| post.resources.contains(r) implies 
+            assert forall |r: Resource| post.resources.contains(r) implies
                 exists |e: SubsetEdge| post.subsets.contains(e) && e.src() == r by {
                     let e = if (r == res) {
                         SubsetEdge { src: res, dst: space }
@@ -443,5 +450,5 @@ state_machine! {
 
         }
     }
-}
 
+} // verus!
