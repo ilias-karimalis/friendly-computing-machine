@@ -94,29 +94,54 @@ impl HoldEdge {
     }
 }
 
-pub ghost struct MapEdge {
-    pub src: ResourceLike,
-    pub dst: ResourceLike,
+pub ghost enum MapEdgeR {
+    SpaceBacking { sb_src: ResourceSpace, sb_dst: Resource },
+    SpaceMap { sm_src: ResourceSpace, sm_dst: ResourceSpace },
+    ResourceMap { rm_src: Resource, rm_dst: Resource },
 }
 
-impl MapEdge {
-    pub open spec fn src(&self) -> ResourceLike {
-        self.src
-    }
+impl MapEdgeR {
+    //pub open spec fn src(&self) -> ResourceLike {
+    //    self.src
+    //}
 
-    pub open spec fn dst(&self) -> ResourceLike {
-        self.dst
-    }
+    //pub open spec fn dst(&self) -> ResourceLike {
+    //    self.dst
+    //}
 
-    // #[verifier::type_invariant]
     pub open spec fn well_formed(self) -> bool {
-        // A Physical Resource(Space), can't map to a Virtual Resource(Space)
-        &&& self.src().rtype() is Physical
-            ==> self.dst().rtype() is Physical
-        // If the src node is a resource then the dst must be a resource
-        &&& self.src() is Resource ==> self.dst() is Resource
+        //  Physical src can't map to a Virtual dst
+        match (self) {
+            MapEdgeR::SpaceBacking { sb_src, sb_dst } => sb_src.rtype() is Physical ==> sb_dst.rtype() is Physical,
+            MapEdgeR::SpaceMap { sm_src, sm_dst } => sm_src.rtype() is Physical ==> sm_dst.rtype() is Physical,
+            MapEdgeR::ResourceMap { rm_src, rm_dst } => rm_src.rtype() is Physical ==> rm_dst.rtype() is Physical,
+        }
     }
 }
+
+//pub ghost struct MapEdge {
+//    pub src: ResourceLike,
+//    pub dst: ResourceLike,
+//}
+//
+//impl MapEdge {
+//    pub open spec fn src(&self) -> ResourceLike {
+//        self.src
+//    }
+//
+//    pub open spec fn dst(&self) -> ResourceLike {
+//        self.dst
+//    }
+//
+//    // #[verifier::type_invariant]
+//    pub open spec fn well_formed(self) -> bool {
+//        // A Physical Resource(Space), can't map to a Virtual Resource(Space)
+//        &&& self.src().rtype() is Physical
+//            ==> self.dst().rtype() is Physical
+//        // If the src node is a resource then the dst must be a resource
+//        &&& self.src() is Resource ==> self.dst() is Resource
+//    }
+//}
 
 pub ghost struct SubsetEdge {
     pub src: Resource,
@@ -135,7 +160,7 @@ impl SubsetEdge {
     pub open spec fn well_formed(self) -> bool {
         // The val of the src Resource must be managed by the space that it subsets
         &&& self.dst().vals().contains(
-            self.src().val(),
+            self.src().val()
         )
         // The src and dst must share a type
         &&& self.src().rtype() == self.dst().rtype()
@@ -174,7 +199,7 @@ state_machine! {
             /// The Hold edges of the Osmosis DAG
             pub holds: Set<HoldEdge>,
             /// The Map edges of the Osmosis DAG
-            pub maps: Set<MapEdge>,
+            pub maps: Set<MapEdgeR>,
             /// The Subset edges of the Osmosis DAG
             pub subsets: Set<SubsetEdge>,
             /// The Request edges of the Osmosis DAG
@@ -210,7 +235,7 @@ state_machine! {
         /// The hold edges must point to nodes in the graph
         #[invariant]
         pub open spec fn hold_nodes_in_graph(&self) -> bool {
-            forall |e: HoldEdge| self.holds.contains(e) ==> {
+            forall |e: HoldEdge| #[trigger] self.holds.contains(e) ==> {
                 &&& self.domains.contains(e.src())
                 &&& e.dst() is Resource ==> self.resources.contains(e.dst()->res)
                 &&& e.dst() is Space ==> self.spaces.contains(e.dst()->space)
@@ -221,14 +246,14 @@ state_machine! {
         #[invariant]
         pub open spec fn hold_edge_to_each_resource(&self) -> bool {
             forall |r: Resource|   self.resources.contains(r) ==>
-                exists |e: HoldEdge|  self.holds.contains(e) && e.dst() is Resource && e.dst()->res == r
+                exists |e: HoldEdge| #[trigger]  self.holds.contains(e) && e.dst() is Resource && e.dst()->res == r
         }
 
         /// There must be at least one hold edge to each resource space in the graph
         #[invariant]
         pub open spec fn hold_edge_to_each_space(&self) -> bool {
             forall |s: ResourceSpace|  self.spaces.contains(s) ==>
-                exists |e: HoldEdge| self.holds.contains(e) && e.dst() is Space && e.dst()->space == s
+                exists |e: HoldEdge| #[trigger] self.holds.contains(e) && e.dst() is Space && e.dst()->space == s
         }
 
         /// The model must have a finite number of map edges
@@ -240,17 +265,16 @@ state_machine! {
         /// Map edges must be well formed
         #[invariant]
         pub open spec fn map_edges_well_formed(&self) -> bool {
-            forall |me: MapEdge| self.maps.contains(me) ==> me.well_formed()
+            forall |me: MapEdgeR| self.maps.contains(me) ==> #[trigger] me.well_formed()
         }
 
         /// The map edges must be between nodes in the grpah
         #[invariant]
         pub open spec fn map_nodes_in_graph(&self) -> bool {
-            forall |e: MapEdge|  self.maps.contains(e) ==> {
-                &&& e.src() is Resource ==> self.resources.contains(e.src()->res)
-                &&& e.src() is Space ==> self.spaces.contains(e.src()->space)
-                &&& e.dst() is Resource ==> self.resources.contains(e.dst()->res)
-                &&& e.dst() is Space ==> self.spaces.contains(e.dst()->space)
+            forall |e: MapEdgeR|  #[trigger] self.maps.contains(e) ==> {
+                &&& e is SpaceBacking ==> self.spaces.contains(e->sb_src) && self.resources.contains(e->sb_dst)
+                &&& e is SpaceMap ==> self.spaces.contains(e->sm_src) && self.spaces.contains(e->sm_dst)
+                &&& e is ResourceMap ==> self.resources.contains(e->rm_src) && self.resources.contains(e->rm_dst)
             }
         }
 
@@ -258,10 +282,13 @@ state_machine! {
         #[invariant]
         pub open spec fn spaces_are_mapped(&self) -> bool {
             forall |s: ResourceSpace|  self.spaces.contains(s) ==>
-                exists |e: MapEdge| self.maps.contains(e) && e.src() is Space && e.src()->space == s
+                exists |e: MapEdgeR| #[trigger] self.maps.contains(e) && ({
+                    ||| e is SpaceBacking && e->sb_src == s
+                    ||| e is SpaceMap && e->sm_src == s
+                })
         }
 
-        /// Notes (2025-02-12)
+        /// Note (2025-02-12)
         ///
         /// I wonder what more we can say about Map edges, for example is it reasonable to
         /// constrain Map edges such that they only ever Map Physical to Physical. Shaurya brought
@@ -277,16 +304,28 @@ state_machine! {
         ///
         /// For now I'm going to perform this physical to physical constraint, but I'm not sure
         /// that it's necessary nor useful.
-        #[invariant]
-        pub open spec fn physical_spaces_map_to_physical_spaces(&self) -> bool {
-            forall |e: MapEdge| self.maps.contains(e) && e.src().rtype() is Physical ==> e.dst().rtype() is Physical
-        }
+        ///
+        /// Note (2025-03-16)
+        ///
+        /// I think this is entriely captured by the map_edges_well_formed invariant and can be
+        /// removed for now, it might need exapnding if we ever attach more information to
+        /// ResourceTypes.
+        //#[invariant]
+        //pub open spec fn physical_spaces_map_to_physical_spaces(&self) -> bool {
+        //    forall |e: MapEdge| self.maps.contains(e) && e.src().rtype() is Physical ==> e.dst().rtype() is Physical
+        //}
 
+
+        /// Note (2025-03-16)
+        ///
+        /// The redefinition of MapEdge as an Enum with thre variants structurally captures this
+        /// invariant so it's no longer needed.
+        ///
         /// map edges whose source is a resource, must have a resource as a destination.
-        #[invariant]
-        pub open spec fn resources_map_to_resources(&self) -> bool {
-            forall |e: MapEdge| self.maps.contains(e) && e.src() is Resource ==> e.dst() is Resource
-        }
+        //#[invariant]
+        //pub open spec fn resources_map_to_resources(&self) -> bool {
+        //    forall |e: MapEdge| self.maps.contains(e) && e.src() is Resource ==> e.dst() is Resource
+        //}
 
         /// The model must have a finite number of subset edges
         #[invariant]
@@ -297,13 +336,13 @@ state_machine! {
         /// Subset edges must be well formed
         #[invariant]
         pub open spec fn subset_edges_well_formed(&self) -> bool {
-            forall |se: SubsetEdge| self.subsets.contains(se) ==> se.well_formed()
+            forall |se: SubsetEdge| self.subsets.contains(se) ==> #[trigger] se.well_formed()
         }
 
         /// Subset edges must be between nodes in the graph
         #[invariant]
         pub open spec fn subset_nodes_in_graph(&self) -> bool {
-            forall |e: SubsetEdge|  self.subsets.contains(e) ==> {
+            forall |e: SubsetEdge| #[trigger] self.subsets.contains(e) ==> {
                 &&& self.resources.contains(e.src())
                 &&& self.spaces.contains(e.dst())
             }
@@ -313,12 +352,13 @@ state_machine! {
         #[invariant]
         pub open spec fn resources_are_subset(&self) -> bool {
             forall |r: Resource| self.resources.contains(r) ==>
-                exists |e: SubsetEdge| self.subsets.contains(e) && e.src() == r
+                exists |e: SubsetEdge| self.subsets.contains(e) && #[trigger] e.src() == r
         }
 
+        #[invariant]
         pub open spec fn subset_src_are_unique(&self) -> bool {
             forall |e1: SubsetEdge, e2: SubsetEdge| 
-                self.subsets.contains(e1) && self.subsets.contains(e2) && e1.src() == e2.src() ==> e1.dst() == e2.dst()
+                #[trigger] self.subsets.contains(e1) && #[trigger] self.subsets.contains(e2) && e1.src() == e2.src() ==> e1.dst() == e2.dst()
         }
 
         /// The model must have a finite number of request edges
@@ -358,7 +398,7 @@ state_machine! {
                 // There must be a hold edge from the holder protection domain to the resource space
                 require exists |he: HoldEdge|
                     pre.holds.contains(he)
-                    && he.src() == holder
+                    && #[trigger] he.src() == holder
                     && he.dst() is Space
                     && he.dst()->space == space;
                 // The Resource must be of the same type as the Resource Space
@@ -376,7 +416,7 @@ state_machine! {
             }
         }
 
-        /// Notes (2025-03-14)
+        /// Note (2025-03-14)
         ///
         /// I'm not sure how we should limit/which requirements we should set on Resources which
         /// can be destroyed. For now, the only requirement I'm setting is that this Resource must
@@ -388,22 +428,120 @@ state_machine! {
             {
                 // The Resource must exist
                 require pre.resources.contains(res);
-                // The Resource must not be the backing resource of a ResourceSpace
-                //require forall |me: MapEdge| me.dst() is Resource && me.dst()->res == res && me.src() is Space ==> !pre.maps.contains(me);
-                //require forall |me: MapEdge| pre.maps.contains(me) && me.dst() is Resource && me.dst()->res == res ==> me.src() is Resource;
-                let reslike = ResourceLike::Resource { res };
-                require forall |me: MapEdge| pre.maps.contains(me) && me.src() is Space ==> me.dst() != reslike;
+                // The Resource must not be mapped or being used to map
+                require forall |me: MapEdgeR| #[trigger] pre.maps.contains(me) ==> ({
+                    ||| me is SpaceBacking && me->sb_dst != res
+                    ||| me is SpaceMap 
+                    ||| me is ResourceMap && me->rm_src != res && me->rm_dst != res });
 
-                let se = choose |se: SubsetEdge| pre.subsets.contains(se) && se.src() == res;
+                let se = choose |se: SubsetEdge| #[trigger] pre.subsets.contains(se) && se.src() == res;
+                let reslike = ResourceLike::Resource { res };
                 let hold_edge_filter = |he: HoldEdge| -> (bool) { he.dst() != reslike };
-                let map_edge_filter  = |me: MapEdge| -> (bool) { me.src() != reslike && me.dst() != reslike };
 
                 update resources = pre.resources.remove(res);
                 update subsets = pre.subsets.remove(se);
                 update holds = pre.holds.filter(hold_edge_filter);
-                update maps = pre.maps.filter(map_edge_filter);
             }
         }
+
+        /// Creates an empty ProtectionDomain
+        transition! {
+            create_pd(pd: ProtectionDomain)
+            {
+                // The ProtectionDomain must not already exist
+                require !pre.domains.contains(pd);
+                
+                update domains = pre.domains.insert(pd);
+            }
+        }
+
+        /// Destroy an empty ProtectionDomain
+        transition! {
+            destroy_pd(pd: ProtectionDomain)
+            {
+                // The ProtectionDomain must already exist
+                require pre.domains.contains(pd);
+                // There should be no edges from/towards this protection domain
+                require forall |he: HoldEdge| pre.holds.contains(he) ==> #[trigger] he.src() != pd;
+                require forall |re: RequestEdge| #[trigger] pre.requests.contains(re) ==> re.src() != pd && re.dst() != pd;
+
+                update domains = pre.domains.remove(pd);
+            }
+        }
+
+        /// Insert a RequestEdge 
+        transition! {
+            create_request_edge(req: RequestEdge)
+            {
+                // The two ProtectionDomains must already exist
+                require pre.domains.contains(req.src());
+                require pre.domains.contains(req.dst()); 
+                // The dst ProtectionDomain must be holding a ResourceSpace of the requested type
+                require exists |he: HoldEdge| pre.holds.contains(he) && #[trigger] he.src() == req.dst() && he.dst() is Space && he.dst()->space.rtype() == req.rtype();
+
+                update requests = pre.requests.insert(req);
+            }
+        }
+
+        /// Remove a RequestEdge
+        transition! {
+            destroy_request_edge(req: RequestEdge)
+            {
+                // The request edge must be in the graph
+                require pre.requests.contains(req);
+
+                update requests = pre.requests.remove(req);
+            }
+        }
+
+        /// Note (2025-03-17)
+        ///
+        /// We need to resolve a chicken-and-egg bootsrapping paradox for Spaces and Resources.
+        /// Currently to create a resource, it must be subset from an existing Space. Additionally,
+        /// to create a Space, it must be Backed by either another ResourceSpace, or a SpaceBacking
+        /// resource. This creates the bootstrapping paradox.
+        ///
+        /// One solution for this would be to create a special ResourceType Physical { 0 }, which
+        /// does not need to be backed by anything, but I guess we would need one of these for
+        /// every type of Physical Resource? (i.e. Physical Memory, Block Storage, ...). Maybe we
+        /// just can't expect that every resource space is backed??
+        ///
+        /// Alternatively, we could use this unique ResourceType to define a Resource which does
+        /// not need to be subset from a Resource space and bootsrap up that way.
+        ///
+        /// TODO Discuss this with @Reto
+        ///
+        /// Insert a MapEdge
+        transition! {
+            create_map_edge(me: MapEdgeR)
+            {
+            }
+        }
+
+
+        /// Create a ResourceSpace
+        transition! {
+            create_resource_space(space: ResourceSpace, backing: ResourceLike)
+            {
+
+            }
+        }
+
+        /// Remove a ResourceSpace
+        ///
+        /// Note (2025-03-17)
+        ///
+        /// Should this be an operation on a ResourceSpace which has already revoked all its
+        /// allocations and Request edges, or should it rather operate as a recursive operation
+        /// which deletes Resources and Request edges?
+        ///
+        transition! {
+            destroy_resource_space(space: ResourceSpace)
+            {
+
+            }
+        }
+
 
         // Inductiveness Proofs:
 
@@ -415,29 +553,29 @@ state_machine! {
         {
             // Invariant: hold_edge_to_each_resource
             assert forall |r: Resource| post.resources.contains(r) implies
-                exists |e: HoldEdge| post.holds.contains(e) && e.dst() is Resource && e.dst()->res == r by {
+                exists |e: HoldEdge| #[trigger] post.holds.contains(e) && e.dst() is Resource && e.dst()->res == r by {
                     let e = if (r == res) {
                         HoldEdge { src: holder, dst: ResourceLike::Resource { res }}
                     } else {
-                        choose |e| pre.holds.contains(e) && e.dst() is Resource && e.dst()->res == r
+                        choose |e| #[trigger] pre.holds.contains(e) && e.dst() is Resource && e.dst()->res == r
                     };
                     assert(post.holds.contains(e) && e.dst() is Resource && e.dst()->res == r);
                 }
 
             // Invariant: hold_edge_to_each_space
             assert forall |s: ResourceSpace| post.spaces.contains(s) implies
-                exists |e: HoldEdge| post.holds.contains(e) && e.dst() is Space && e.dst()->space == s by {
-                    let e = choose |e| pre.holds.contains(e) && e.dst() is Space && e.dst()->space == s;
+                exists |e: HoldEdge| #[trigger] post.holds.contains(e) && e.dst() is Space && e.dst()->space == s by {
+                    let e = choose |e| #[trigger] pre.holds.contains(e) && e.dst() is Space && e.dst()->space == s;
                     assert(post.holds.contains(e) && e.dst() is Space && e.dst()->space == s);
                 }
 
             // Invariant: resources_are_subsets
             assert forall |r: Resource| post.resources.contains(r) implies
-                exists |e: SubsetEdge| post.subsets.contains(e) && e.src() == r by {
+                exists |e: SubsetEdge| #[trigger] post.subsets.contains(e) && e.src() == r by {
                     let e = if (r == res) {
                         SubsetEdge { src: res, dst: space }
                     } else {
-                        choose |e| pre.subsets.contains(e) && e.src() == r
+                        choose |e| pre.subsets.contains(e) && #[trigger] e.src() == r
                     };
                     assert(post.subsets.contains(e) && e.src() == r);
                 }
@@ -448,29 +586,44 @@ state_machine! {
         {
             // Invariant: hold_edge_to_each_resource
             assert forall |r: Resource| post.resources.contains(r) implies
-                exists |e: HoldEdge| post.holds.contains(e) && e.dst() is Resource && e.dst()->res == r by {
-                    let e = choose |e| pre.holds.contains(e) && e.dst() is Resource && e.dst()->res == r;
+                exists |e: HoldEdge| #[trigger] post.holds.contains(e) && e.dst() is Resource && e.dst()->res == r by {
+                    let e = choose |e| #[trigger] pre.holds.contains(e) && e.dst() is Resource && e.dst()->res == r;
                     assert(post.holds.contains(e) && e.dst() is Resource && e.dst()->res == r);
                 }
 
             // Invariant: hold_edge_to_each_space
             assert forall |s: ResourceSpace| post.spaces.contains(s) implies
-                exists |e: HoldEdge| post.holds.contains(e) && e.dst() is Space && e.dst()->space == s by {
-                    let e = choose |e| pre.holds.contains(e) && e.dst() is Space && e.dst()->space == s;
+                exists |e: HoldEdge| #[trigger] post.holds.contains(e) && e.dst() is Space && e.dst()->space == s by {
+                    let e = choose |e| #[trigger] pre.holds.contains(e) && e.dst() is Space && e.dst()->space == s;
                     assert(post.holds.contains(e) && e.dst() is Space && e.dst()->space == s);
                 }
 
-            // Invariant: spaces_are_mapped
-            assert forall |s: ResourceSpace| post.spaces.contains(s) implies
-                exists |e: MapEdge| post.maps.contains(e) && e.src() is Space && e.src()->space == s by {
-                    let reslike = ResourceLike::Resource { res };
-                    let e = choose |e: MapEdge| pre.maps.contains(e) && e.src() is Space && e.src()->space == s;
-                    assert(e.src() != reslike);
-                    assert(e.dst() != reslike);
-                    assert(forall |e: MapEdge| pre.maps.contains(e) && e.src() != reslike && e.dst() != reslike ==> post.maps.contains(e));
-                    assert(post.maps.contains(e) && e.src() is Space && e.src()->space == s);
-                }
+            // Invariant subset_nodes_in_graph
+            assert(post.subset_nodes_in_graph()) by {
+                assert(forall |e| #[trigger] post.subsets.contains(e) ==> e.src() != res);
+            }
         }
+
+        #[inductive(create_pd)]
+        fn create_pd_inductive(pre: Self, post: Self, pd: ProtectionDomain) { }
+
+        #[inductive(destroy_pd)]
+        fn destry_pd_inductve(pre: Self, post: Self, pd: ProtectionDomain) { }
+
+        #[inductive(create_request_edge)]
+        fn create_request_edge_inductive(pre: Self, post: Self, req: RequestEdge) { }
+
+        #[inductive(destroy_request_edge)]
+        fn destroy_request_edge_inductive(pre: Self, post: Self, req: RequestEdge) { }
+
+        #[inductive(create_map_edge)]
+        fn create_map_edge_inductive(pre: Self, post: Self, me: MapEdgeR) { }
+
+        #[inductive(create_resource_space)]
+        fn create_resource_space_inductive(pre: Self, post: Self, space: ResourceSpace, backing: ResourceLike) { }
+
+        #[inductive(destroy_resource_space)]
+        fn destroy_resource_space_inductive(pre: Self, post: Self, space: ResourceSpace) { }
 
         // Helper functions:
 
