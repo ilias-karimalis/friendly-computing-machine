@@ -423,6 +423,7 @@ state_machine! {
         /// not be in use as the backing Resource for a ResourceSpace. The alternative I can think
         /// of here is recursively deleting the ResourceSpace, maybe this is someting to discuss
         /// with @Reto.
+        ///
         transition! {
             destroy_resource(res: Resource)
             {
@@ -509,7 +510,12 @@ state_machine! {
         /// Alternatively, we could use this unique ResourceType to define a Resource which does
         /// not need to be subset from a Resource space and bootsrap up that way.
         ///
-        /// TODO Discuss this with @Reto
+        /// Note (2025-03-19)
+        ///
+        /// I discussed this with Reto and he suggested that we take the approach that Physical
+        /// resource spaces don't actually get instantiated and instead are setup at the kickoff of
+        /// the model. In addition we create the first ProtectionDomain which holds these
+        /// ResourceSpaces.
         ///
         /// Insert a MapEdge
         transition! {

@@ -1,0 +1,6 @@
+2025-03-19:
+
+After discussing with Reto, I'm going to refactor the model transitions such 
+that they all take a ProtectionDomain as an argument which is the domain that
+is performing this transition in model state.
+
