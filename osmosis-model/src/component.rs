@@ -1,3 +1,7 @@
+/// MIT License
+///
+/// Copyright (c) 2025 Ilias Karimalis
+
 use vstd::prelude::*;
 
 verus!

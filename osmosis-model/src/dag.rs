@@ -1,3 +1,7 @@
+/// MIT License
+///
+/// Copyright (c) 2025 Ilias Karimalis
+
 use state_machines_macros::*;
 use vstd::prelude::*;
 use vstd::set::Set;
