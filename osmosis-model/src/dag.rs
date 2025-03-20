@@ -25,7 +25,7 @@ state_machine!
             /// The Hold edges of the Osmosis DAG
             pub holds: Set<HoldEdge>,
             /// The Map edges of the Osmosis DAG
-            pub maps: Set<MapEdgeR>,
+            pub maps: Set<MapEdge>,
             /// The Subset edges of the Osmosis DAG
             pub subsets: Set<SubsetEdge>,
             /// The Request edges of the Osmosis DAG
@@ -91,13 +91,13 @@ state_machine!
         /// Map edges must be well formed
         #[invariant]
         pub open spec fn map_edges_well_formed(&self) -> bool {
-            forall |me: MapEdgeR| self.maps.contains(me) ==> #[trigger] me.well_formed()
+            forall |me: MapEdge| self.maps.contains(me) ==> #[trigger] me.well_formed()
         }
 
         /// The map edges must be between nodes in the grpah
         #[invariant]
         pub open spec fn map_nodes_in_graph(&self) -> bool {
-            forall |e: MapEdgeR|  #[trigger] self.maps.contains(e) ==> {
+            forall |e: MapEdge|  #[trigger] self.maps.contains(e) ==> {
                 &&& e is SpaceBacking ==> self.spaces.contains(e->sb_src) && self.resources.contains(e->sb_dst)
                 &&& e is SpaceMap ==> self.spaces.contains(e->sm_src) && self.spaces.contains(e->sm_dst)
                 &&& e is ResourceMap ==> self.resources.contains(e->rm_src) && self.resources.contains(e->rm_dst)
@@ -108,7 +108,7 @@ state_machine!
         #[invariant]
         pub open spec fn spaces_are_mapped(&self) -> bool {
             forall |s: ResourceSpace|  #[trigger] self.spaces.contains(s) && s.rtype() is Virtual ==>
-                exists |e: MapEdgeR| #[trigger] self.maps.contains(e) && ({
+                exists |e: MapEdge| #[trigger] self.maps.contains(e) && ({
                     ||| e is SpaceBacking && e->sb_src == s
                     ||| e is SpaceMap && e->sm_src == s
                 })
@@ -268,7 +268,7 @@ state_machine!
                 require pre.domains.contains(pd);
                 // The Protection Domain must hold the Resource and the 
                 // The Resource must not be mapped or being used to map
-                require forall |me: MapEdgeR| #[trigger] pre.maps.contains(me) ==> ({
+                require forall |me: MapEdge| #[trigger] pre.maps.contains(me) ==> ({
                     ||| me is SpaceBacking && me->sb_dst != res
                     ||| me is SpaceMap 
                     ||| me is ResourceMap && me->rm_src != res && me->rm_dst != res });
@@ -357,7 +357,7 @@ state_machine!
         ///
         /// Insert a MapEdge
         transition! {
-            create_map_edge(me: MapEdgeR)
+            create_map_edge(me: MapEdge)
             {
             }
         }
@@ -478,7 +478,7 @@ state_machine!
         fn destroy_request_edge_inductive(pre: Self, post: Self, req: RequestEdge) { }
 
         #[inductive(create_map_edge)]
-        fn create_map_edge_inductive(pre: Self, post: Self, me: MapEdgeR) { }
+        fn create_map_edge_inductive(pre: Self, post: Self, me: MapEdge) { }
 
         #[inductive(create_resource_space)]
         fn create_resource_space_inductive(pre: Self, post: Self, space: ResourceSpace, backing: ResourceLike) { }

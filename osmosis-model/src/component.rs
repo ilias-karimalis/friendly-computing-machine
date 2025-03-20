@@ -7,7 +7,7 @@ use vstd::prelude::*;
 verus!
 {
 
-/// A Protection Domain
+/// Protection Domain
 pub ghost struct ProtectionDomain {
     pub id: nat,
 }
@@ -23,7 +23,7 @@ impl ProtectionDomain {
     }
 }
 
-/// A Resource
+/// Resource
 pub ghost struct Resource {
     pub rtype: ResourceType,
     pub val: nat,
@@ -41,7 +41,7 @@ impl Resource {
     }
 }
 
-/// A Resource Space
+/// Resource Space
 pub ghost struct ResourceSpace {
     pub rtype: ResourceType,
     pub vals: Set<nat>,
@@ -59,7 +59,7 @@ impl ResourceSpace {
     }
 }
 
-/// A Resource Type
+/// Resource Type
 pub ghost enum ResourceType {
     Virtual(nat),
     Physical(nat),
@@ -80,7 +80,7 @@ impl ResourceLike {
     }
 }
 
-/// A Hold edge
+/// Hold edge
 pub ghost struct HoldEdge {
     pub src: ProtectionDomain,
     pub dst: ResourceLike,
@@ -96,55 +96,25 @@ impl HoldEdge {
     }
 }
 
-pub ghost enum MapEdgeR {
+/// Map edge
+pub ghost enum MapEdge {
     SpaceBacking { sb_src: ResourceSpace, sb_dst: Resource },
     SpaceMap { sm_src: ResourceSpace, sm_dst: ResourceSpace },
     ResourceMap { rm_src: Resource, rm_dst: Resource },
 }
 
-impl MapEdgeR {
-    //pub open spec fn src(&self) -> ResourceLike {
-    //    self.src
-    //}
-
-    //pub open spec fn dst(&self) -> ResourceLike {
-    //    self.dst
-    //}
-
+impl MapEdge {
     pub open spec fn well_formed(self) -> bool {
         //  Physical src can't map to a Virtual dst
         match (self) {
-            MapEdgeR::SpaceBacking { sb_src, sb_dst } => sb_src.rtype() is Physical ==> sb_dst.rtype() is Physical,
-            MapEdgeR::SpaceMap { sm_src, sm_dst } => sm_src.rtype() is Physical ==> sm_dst.rtype() is Physical,
-            MapEdgeR::ResourceMap { rm_src, rm_dst } => rm_src.rtype() is Physical ==> rm_dst.rtype() is Physical,
+            MapEdge::SpaceBacking { sb_src, sb_dst } => sb_src.rtype() is Physical ==> sb_dst.rtype() is Physical,
+            MapEdge::SpaceMap { sm_src, sm_dst } => sm_src.rtype() is Physical ==> sm_dst.rtype() is Physical,
+            MapEdge::ResourceMap { rm_src, rm_dst } => rm_src.rtype() is Physical ==> rm_dst.rtype() is Physical,
         }
     }
 }
 
-//pub ghost struct MapEdge {
-//    pub src: ResourceLike,
-//    pub dst: ResourceLike,
-//}
-//
-//impl MapEdge {
-//    pub open spec fn src(&self) -> ResourceLike {
-//        self.src
-//    }
-//
-//    pub open spec fn dst(&self) -> ResourceLike {
-//        self.dst
-//    }
-//
-//    // #[verifier::type_invariant]
-//    pub open spec fn well_formed(self) -> bool {
-//        // A Physical Resource(Space), can't map to a Virtual Resource(Space)
-//        &&& self.src().rtype() is Physical
-//            ==> self.dst().rtype() is Physical
-//        // If the src node is a resource then the dst must be a resource
-//        &&& self.src() is Resource ==> self.dst() is Resource
-//    }
-//}
-
+/// Subset edge
 pub ghost struct SubsetEdge {
     pub src: Resource,
     pub dst: ResourceSpace,
@@ -169,6 +139,7 @@ impl SubsetEdge {
     }
 }
 
+/// Request edge
 pub ghost struct RequestEdge {
     pub src: ProtectionDomain,
     pub dst: ProtectionDomain,
