@@ -4,3 +4,9 @@ After discussing with Reto, I'm going to refactor the model transitions such
 that they all take a ProtectionDomain as an argument which is the domain that
 is performing this transition in model state.
 
+2025-03-20:
+
+Rewriting the model initialize transition to insert a set of initial physical 
+resource spaces and the initial ProtectionDomain { 0 }. Also making a change to
+the invariants for ResourceSpaces, such that Virtual ResourcesSpaces are the 
+only ones that need to be backed by a Map.

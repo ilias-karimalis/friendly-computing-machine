@@ -1,2 +1,4 @@
 // Copyright (c) 2025 Ilias Karimalis
-mod model;
+mod component;
+mod dag;
+mod utils;
