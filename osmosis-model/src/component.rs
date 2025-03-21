@@ -160,4 +160,4 @@ impl RequestEdge {
     }
 }
 
-}
+} // verus!

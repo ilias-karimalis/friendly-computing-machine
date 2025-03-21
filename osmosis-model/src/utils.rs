@@ -22,4 +22,4 @@ pub proof fn set_map_finite_preserving<A, B>(x: Set<A>, map_fn: spec_fn(A) -> B)
     }
 }
 
-}
+} // verus!

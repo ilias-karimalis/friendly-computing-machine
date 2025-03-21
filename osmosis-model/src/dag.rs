@@ -370,6 +370,11 @@ state_machine!
             }
         }
 
+        /// Create a Virtual ResourceSpace
+        /// TODO
+        //transition! {
+        //    create_virtual_space(space: ResourceSpace, 
+
         /// Remove a ResourceSpace
         ///
         /// Note (2025-03-17)

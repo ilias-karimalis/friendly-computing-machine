@@ -10,3 +10,27 @@ Rewriting the model initialize transition to insert a set of initial physical
 resource spaces and the initial ProtectionDomain { 0 }. Also making a change to
 the invariants for ResourceSpaces, such that Virtual ResourcesSpaces are the 
 only ones that need to be backed by a Map.
+
+2025-03-21:
+
+One of the consequences of letting Physical ResourceSpaces be unmapped, is that
+to my best undertanding: we should not allow for a transition to introduce new
+physical resource spaces. i.e. what you boot up with is what you get.
+
+There's a couple open questions around how the transitions should change for the
+entity based transition model (i.e all transitions take a PD argument which 
+represents the entity in the system which is performing the transition):
+Q: Who should be able to create/destroy a resource space?
+Q: Should the destruction of a resource space only be performed when it has no 
+   actively allocated resources, or should it be a recursive operation that 
+   cleans up all it's allocations?
+Q: Who should be allowed to create/destroy a protection domain?
+   ^ We started to discuss this question in today's OS meeting, and one option
+     seems to be to treat PDs as a type of resource, which are themselves 
+     allocated from a resource space. I don't think that's the only way of 
+     dealing with it, but I need to think for a little longer on this...
+Q: Who gets to destroy a hold edge? Should it be the current holder, or the 
+   entity holding the resource space from which it was allocated, or both?
+
+I need to answer some of these before I finish up the model transitions and I
+have reached out to the osmosis folks for their thoughts on this.
