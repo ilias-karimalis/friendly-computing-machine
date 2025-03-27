@@ -219,6 +219,14 @@ state_machine!
         }
 
         // Transitions:
+        
+
+
+        /// Creates a new resource node from a secific resource
+        //transition! {
+        //    create_resource_local(pd: ProtectionDomain, 
+        //}
+
 
         /// Create a new resource node. This is done by subsetting it from a specific resource space
         transition! {
@@ -266,7 +274,8 @@ state_machine!
                 require pre.resources.contains(res);
                 // The Protection Domain must exist
                 require pre.domains.contains(pd);
-                // The Protection Domain must hold the Resource and the 
+                // The Protection Domain must hold the Resource 
+                require exists |he: HoldEdge| pre.holds.contains(he) && he.src() == pd && he.dst() is Resource && he.dst()->res == res;
                 // The Resource must not be mapped or being used to map
                 require forall |me: MapEdge| #[trigger] pre.maps.contains(me) ==> ({
                     ||| me is SpaceBacking && me->sb_dst != res
@@ -283,9 +292,9 @@ state_machine!
             }
         }
 
-        /// Creates an empty ProtectionDomain
+        /// The [parent] ProtectionDomain creates a new empty [pd] ProtectionDomain
         transition! {
-            create_pd(pd: ProtectionDomain)
+            create_pd(parent: ProtectionDomain, pd: ProtectionDomain)
             {
                 // The ProtectionDomain must not already exist
                 require !pre.domains.contains(pd);

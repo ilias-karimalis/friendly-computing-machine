@@ -34,3 +34,38 @@ Q: Who gets to destroy a hold edge? Should it be the current holder, or the
 
 I need to answer some of these before I finish up the model transitions and I
 have reached out to the osmosis folks for their thoughts on this.
+
+2025-03-24:
+
++ HoldEdge to Protection Domain to demarcate the entity which spawned it.
++ Two versions of resource creation: (1) the process which holds the resource
+  space. (2) a domain which has a request edge to the process holding the 
+  resource space.
+
+2025-03-25:
+
+Reading List:
+ - SOSP 24:
+    - Verus: A Practical Foundation for Systems Verification
+    - Practical Verification of System-Software Components Written in Standard C
+    - Modular Verification of Secure and Leakage-Free Systems: From Application
+      Specification to Circuit-Level Implementation
+    - NOPE: Strengthening domain authentication with succinct proofs
+- KISV 24:
+    - Robust and Immediate Resource Reclamation with M3
+    - Kicking the Firmware Out of the TCB with the Miralis Virtual Firmware 
+      Monitor
+    - Bridge: A Leak-Free Hardware-Software Architecture for Parallel Embedded
+      Systems
+    - Veld: Verified Linux Drivers
+
+2025-03-26:
+
+I started reading "An Evaluation of Capabilities for a Multikernel" whiiich is
+Mark Nevill's (ETH) master's thesis. It includes a TLA+ secification of a 
+single core Barrelfish capability system which avoids all the hairyness of
+multicore capabilities. The thesis also discusses the issues with multicore
+capabilities and describes how they were solved in Barrelfish. It might be 
+detailed enough to start modelling in Verus, but there's also another thesis by
+Simon Gerber: "Virtual Memory in a Multikernel" which seems to have a TLA+ spec
+for the multicore case. 
