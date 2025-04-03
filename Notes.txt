@@ -69,3 +69,39 @@ capabilities and describes how they were solved in Barrelfish. It might be
 detailed enough to start modelling in Verus, but there's also another thesis by
 Simon Gerber: "Virtual Memory in a Multikernel" which seems to have a TLA+ spec
 for the multicore case. 
+
+2025-03-27:
+
+I started thinking about how we would model Barrelfish capabilities in the 
+Osmosis model. We need a representation that allows for the presentation of
+capability operations and the invariants they demand. 
+
+One thing that would be kind of nice is if capabilities could be treated as 
+resources that implements/back certain mappings in the system, wether that's to
+physical pages, page tables, ... 
+
+Another thing that would be nice as a result is if resources were subsettable 
+so that there's some kind of graph edge between a capability and its ancestors.
+
+2025-03-28:
+
+Started reading some of the backgrond section of Nevill's thesis. More 
+specifically, I read "Verifying the EROS Confinement Mechanism". I didn't read
+it closely enough to fully follwo the pproof, but it pointed to a couple papers
+which I should probably read first:
+- Protection in Operating Systems (Harrison, Ruzzo, Ullman)
+    ^ Introduces an extension to the Graham-Denning take-grant model
+- On the inability of an unmodified capability machine to enforce the 
+  *-property (W.E. Boebert)
+- Protection in Programmed Systems (A.K. Jones, PhD thesis)
+    ^ Part of the HYDRA os project
+- A note on the confinement problem (B.W. Lampson)
+    ^ This paper actually introduces the confinement property pproved in this
+      EROS paper.
+- Improving IPC by kernel design (J. Liedtke)
+    ^ Introduces the modern form of fast IPC which allows for all the fast 
+      microkernels we have in the L4 tradition
+- EROS: A fast capability system (J.S. Shapiro, ...)
+
+I want to read more about the take-grant system because it seems like the 
+osmosis model might just be a concretization of it?

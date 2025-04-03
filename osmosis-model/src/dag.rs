@@ -14,7 +14,7 @@ verus!
 
 state_machine! 
 {
-    osmosis_dag {
+    OsmosisDAG {
         fields {
             /// The protection domains of the Osmosis DAG
             pub domains: Set<ProtectionDomain>,
@@ -480,7 +480,7 @@ state_machine!
         }
 
         #[inductive(create_pd)]
-        fn create_pd_inductive(pre: Self, post: Self, pd: ProtectionDomain) { }
+        fn create_pd_inductive(pre: Self, post: Self, parent: ProtectionDomain, pd: ProtectionDomain) { }
 
         #[inductive(destroy_pd)]
         fn destry_pd_inductve(pre: Self, post: Self, pd: ProtectionDomain) { }

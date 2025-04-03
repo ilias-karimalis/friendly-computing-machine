@@ -2,6 +2,9 @@
 ///
 /// Copyright (c) 2025 Ilias Karimalis
 
+use state_machines_macros::*;
+use vstd::prelude::*;
+
 use crate::dag::*;
 
 verus!
@@ -27,6 +30,18 @@ pub ghost enum Capability {
     VNode_AARCH64_L3_Mapping,
 }
 
+state_machine!
+{
+    barrelfish_capability_dag 
+    {
+        fields 
+        {
+            pub model: OsmosisDAG::State,
+        }
+
+    }
+
+}
 
 
 } // verus!
