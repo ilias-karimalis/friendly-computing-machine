@@ -105,3 +105,5 @@ which I should probably read first:
 
 I want to read more about the take-grant system because it seems like the 
 osmosis model might just be a concretization of it?
+
+
