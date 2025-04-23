@@ -18,11 +18,19 @@ spec const OBJSIZE_DISPATCHER: nat = 1024;
 
 pub type KernelObjectID = usize;
 
+pub ghost struct KernelObjectLocation {
+    // Location marked in physical addresses.
+    base: nat,
+    bytes: nat,
+}
+
 pub ghost enum KernelObject {
     L1CNode(Seq<KernelObjectID>),
-    L2CNode([Capability; 256]),
+    L2CNode([KernelObjectID; 256]),
     Dispatcher { cspace: KernelObjectID },
+    Capability(Capability),
 }
+
 
 // Constants defining well known Cspace locations:
 spec const ROOTCN_SLOT_TASKCN: nat = 0;
@@ -38,8 +46,8 @@ pub ghost enum Capability {
     //RAM { base: nat, bytes: nat  },
     //Frame { base: nat, bytes: nat },
     //Dispatcher,
-    L1_CNode { disp: Dispatcher },
-    L2_CNode,
+    L1_CNode { l1_kid: KernelObjectID },
+    L2_CNode { l2_kid: KernelObjectID },
     //IDC_Endpoint,
     //VNode_AARCH64_L0,
     //VNode_AARCH64_L1,
@@ -103,15 +111,14 @@ impl CNodeRef {
         &&& self.root.wf(disp)
         &&& self.node.wf(disp)
         &&& self.root.capability(disp) is L1_CNode
-        /// Note (2025-04-15)
-        /// 
-        /// How do we actually check that the root is the L1CNode root to this CSpace?
-        /// How does Barrelfish actually check?
-        /// In reality, this check is performed in the kernel, where the lookup of the CSpace
-        /// content is not a function of the Dispatcher from which it's called, but rather the work
-        /// is performed by finding the capability in the mdb.
+        // Note (2025-04-15)
+        // 
+        // How do we actually check that the root is the L1CNode root to this CSpace?
+        // How does Barrelfish actually check?
+        // In reality, this check is performed in the kernel, where the lookup of the CSpace
+        // content is not a function of the Dispatcher from which it's called, but rather the work
+        // is performed by finding the capability in the mdb.
         &&& false
-        &&&
     }
 }
 
@@ -142,49 +149,24 @@ impl CapRef {
     }
 }
 
-pub ghost struct Dispatcher {
-    pub cspace: Seq<L1CNodeEntry>,
-}
-
-pub ghost struct L1CNode {
-    pub space: Seq<L1CNodeEntry>,
-}
-
-impl L1CNode {
-    pub open spec fn wf(&self) -> bool
-    {
-        self.space.len() >=  
-    }
-}
-
-pub ghost enum L1CNodeEntry {
-    L2CNode([Capability; 256]),
-    Empty,
-}
-
-impl Dispatcher {
-    pub open spec fn wf(&self) -> bool
-    {
-        //&&& forall |i:
-        &&& true
-    }
-}
-
-pub ghost struct Process {
-    pub vas: Set<nat>,
-    pub pmap: Map<nat, nat>,
-    pub tables: Set<nat>,
-    pub pid: nat,
-    pub cspace: Seq<Seq<Capability>>,
-}
-
 state_machine!
 {
     BarrelfishDAGSingleCore {
+        spec const NULL_CAP_KERNEL_OBJECT_ID: nat = 0;
+
         fields {
             /// Maps a pid to its dispatcher
-            pub dsps: Map<nat, Dispatcher>,
+            pub dsps: Map<nat, KernelObjectID>,
             pub kernel_objects: Map<nat, KernelObject>,
+        }
+
+        init! {
+            initialize()
+            {
+                let ko = Map::empty();
+                ko.insert(NULL_CAP_KERNEL_OBJECT_ID, KernelObject::Capability(Capability::Null));
+                init kernel_objects = ko;
+            }
         }
 
 
@@ -209,8 +191,8 @@ state_machine!
             cap_copy(entity_pid: nat, dest: CapRef, src: CapRef)
             {
                 // The entity must exist
-                require pre.procs.contains(entity_pid);
-                let entity = pre.procs[entity]
+                require pre.dsps.contains(entity_pid);
+                let entity_koid = pre.dsps[entity];
                 // src must reference a valid capability in the entities CSpace
                 require 
                 // dst must be a valid empty slot in the destination CSpace
