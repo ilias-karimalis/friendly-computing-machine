@@ -106,4 +106,12 @@ which I should probably read first:
 I want to read more about the take-grant system because it seems like the 
 osmosis model might just be a concretization of it?
 
+2025-04-23:
 
+"The Osmosis Model provides us an implementation agnostic language for speaking
+formally about the flow of resources around a system."
+
+Using this model, we're able to use a 
+
+- How do I model the tree like descendant properties of capabilities?
+    ^ I could implement the AA tree like they do in Barrelfish.

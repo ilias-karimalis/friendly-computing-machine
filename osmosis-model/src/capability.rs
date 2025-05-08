@@ -5,6 +5,7 @@ use state_machines_macros::*;
 use vstd::prelude::*;
 
 use crate::dag::*;
+use crate::utils::Optional;
 
 verus! {
 
@@ -51,7 +52,9 @@ impl KernelObject {
     pub open spec fn wf(&self, state: &KernelState) -> bool {
         match (self) {
             KernelObject::L1CNode { l1_cnode } => l1_cnode.wf(state),
-            _ => arbitrary(),
+            KernelObject::L2CNode { l2_cnode } => l2_cnode.wf(state),
+            KernelObject::Dispatcher { disp } => disp.wf(state),
+            KernelObject::Capability { cap } => cap.wf(state),
         }
     }
 }
@@ -94,6 +97,7 @@ impl L2CNodeObject {
 
 pub ghost struct DispatcherObject {
     pub cspace: KernelObjectID,
+    pub pid: nat,
 }
 
 impl DispatcherObject {
@@ -136,6 +140,7 @@ impl CapabilityObject {
 
 pub ghost struct KernelState {
     pub objects: Map<KernelObjectID, KernelObject>,
+    pub disps: Map<nat, KernelObjectID>,
 }
 
 impl KernelState {
@@ -159,7 +164,9 @@ pub spec const U8_MAX: int = 0x0FF;
 /*****************************************************************************/
 
 pub ghost struct CapAddr {
+    /// Index into the L1CNode
     pub l1: int,
+    /// Index into the L2CNode
     pub l2: int,
 }
 
@@ -175,12 +182,35 @@ impl CapAddr {
         &&& 0 <= self.l2 <= U8_MAX
     }
 
-    pub open spec fn capability(&self, l1_cnode: L1CNodeObject, state: KernelState) -> CapabilityObject
+    /// Returns the L2CNodeObject referenced by the l1 index of this CapAddr
+    pub open spec fn l1(&self, l1_cnode: L1CNodeObject, state: &KernelState) -> Optional<L2CNodeObject>
         recommends state.wf() && self.wf(l1_cnode)
     {
-        l1_cnode.table.index(self.l1).to_obj(&state)->l2_cnode.table.index(self.l2).to_obj(&state)->cap
-        //state.objects.index(l1_cnode.table.index(self.
-        //state.objects.index(state.objects.index(l1_cnode.table.index(self.l1))->l2_cnode.table.index(self.l2))->cap
+        let cap: CapabilityObject = l1_cnode.table.index(self.l1).to_obj(&state)->cap;
+        if (cap is L2CNode) {
+            Optional::Some { some: cap->l2_kid.to_obj(&state)->l2_cnode }
+        } else {
+            Optional::None
+        }
+    }
+
+    /// Returns the Capability referenced by thie l2 index of this CapAddr
+    pub open spec fn l2(&self, l2_cnode: L2CNodeObject, state: &KernelState) -> CapabilityObject
+        recommends state.wf() && 0 <= self.l2 <= U8_MAX
+    {
+        l2_cnode.table.index(self.l2).to_obj(&state)->cap
+    }
+
+    /// Returns the Capability referenced by the CapAddr directly
+    pub open spec fn to_cap(&self, l1_cnode: L1CNodeObject, state: &KernelState) -> Optional<CapabilityObject>
+        recommends state.wf() && l1_cnode.wf(state) && self.wf(l1_cnode) && self.l1(l1_cnode, state) is Some
+    {
+        let l2_cap: CapabilityObject = l1_cnode.table.index(self.l1).to_obj(&state)->cap;
+        if (l2_cap is L2CNode) {
+            Optional::Some { some: l2_cap->l2_kid.to_obj(&state)->l2_cnode.table.index(self.l2).to_obj(&state)->cap }
+        } else {
+            Optional::None
+        }
     }
 }
 
@@ -189,6 +219,7 @@ pub ghost enum CNodeType {
     L2,
 }
 
+/// A Reference to a CNode
 pub ghost struct CNodeRef {
     /// The location of the Capability to the root L1_CNode of the CSpace of the referencing entity.
     pub root: CapAddr,
@@ -196,6 +227,32 @@ pub ghost struct CNodeRef {
     pub node: CapAddr,
     /// The type of CNode being referenced (either L1 or L2).
     pub level: CNodeType,
+}
+
+impl CNodeRef {
+    pub open spec fn wf(&self, disp: DispatcherObject, state: &KernelState) -> bool
+        recommends disp.wf(state),
+    {
+        false
+//        let disp_l1_cnode = state.objects.index(disp.cspace)->l1_cnode;
+//        let root_cap_opt = self.root.to_cap(disp_l1_cnode, state);
+//        let node_cap_opt = self.node.to_cap(disp_l1_cnode, state);
+//        // Dispatcher is well-formed
+//        &&& disp.wf(state)
+//        // The root and node must both be well-formed
+//        &&& self.root.wf(disp_l1_cnode);
+//        &&& self.node.wf(disp_l1_cnode);
+//        // The root reference must be the same as the DispatcherObject L1Cnode reference
+//        &&& root_cap_opt is Some
+//        &&& root_cap_opt->some is L1CNode 
+//        &&& root_cap_opt->some->l1_kid == disp.cspace 
+//        // The node reference's value only matters if the type is L2
+//
+//        
+//        // &&& self.root == disp.cspace
+//        // The node reference must refer to a Capability kernel object, which itself points to the root L1 CNode of this Dispatcher. TODO
+//
+    }
 }
 
 // impl CNodeRef {
@@ -218,89 +275,70 @@ pub ghost struct CNodeRef {
 //     }
 // }
 
-// pub ghost struct CapRef {
-//     /// Identifies where in the calling entities CSpace is the capability to the L1CNode referenced
-//     /// by this capability reference.
-//     pub cnode: CNodeRef,
-//     /// Identifies the offset into the L1CNode in which the referenced capability resides.
-//     pub addr: CapAddr,
-// }
+pub ghost struct CapRef {
+    /// Identifies where in the calling entities CSpace is the capability to the L1CNode referenced
+    /// by this capability reference.
+    pub cnode: CNodeRef,
+    /// Identifies the offset into the L1CNode in which the referenced capability resides.
+    pub addr: CapAddr,
+}
 
-// impl CapRef {
-//     /// A CapRef is well formed with respect to a Dispatcher proc iff:
-//     /// - cnode must reference an existing L1CNode in the disp CSpace
-//     pub open spec fn wf(&self, disp: DispatcherObject) -> bool
-//         recommends
-//             disp.wf(),
-//     {
-//         &&& true
-//          //&&& disp.cspace[cnode.root.l1]
-//     }
-
-//     pub open spec fn capability(&self, disp: DispatcherObject) -> CapabilityObject
-//         recommends
-//             disp.wf() && self.wf(disp),
-//     {
-
-//     }
-// }
+impl CapRef {
+    pub open spec fn wf(&self, disp: DispatcherObject, state: &KernelState) -> bool
+        recommends disp.wf(state),
+    {
+        &&& true
+    }
+}
 
 spec const NULL_CAP_KERNEL_OBJECT_ID: nat = 0;
 
 state_machine!
 {
-    BarrelfishDAGSingleCore {
-
+    BarrelfishSingleCoreDag {
         fields {
-            pub state: KernelState
+            pub state: KernelState,
+        }
+
+        // Invariants:
+
+        /// The dispatcher map must be consistent with the KernelState object map
+        #[invariant]
+        pub open spec fn dispatcher_map_wf(&self) -> bool {
+            forall |koid: KernelObjectID| self.state.disps.contains_value(koid) <==> self.state.objects.contains_key(koid) && self.state.objects.index(koid) is Dispatcher
         }
 
         init! {
             initialize()
             {
                 init state = KernelState {
-                    objects: Map::empty()
+                    objects: Map::empty(),
+                    disps: Map::empty(),
                 };
             }
         }
 
-
-        //init! {
-        //    initialize(ram_caps: Set<Capability>)
-        //    {
-
-        //        let init_process = Process {
-        //            // Should we model the early memory of the init process?
-        //            vas: Set::empty(),
-        //            pmap: Map::empty(),
-        //            tables: Set::empty(),
-        //            pid: 1,
-        //            cspace: Seq::empty(),
-        //        };
-        //        init procs = Set::empty().insert(init_process);
-        //    }
-        //}
-
-        /// Copy a capability referenced by src to location dst.
-        // transition! {
-        //     cap_copy(entity_pid: nat, dest: CapRef, src: CapRef)
-        //     {
-        //         // The entity must exist
-        //         // require pre.dsps.contains(entity_pid);
-        //         // let entity_koid = pre.dsps[entity];
-        //         // src must reference a valid capability in the entities CSpace
-        //         // dst must be a valid empty slot in the destination CSpace
-        //         //require
-
-        //     }
-        // }
+        /// Copy a capability referenced by src to the location dst.
+        /// The two caprefs need not be in the same CSpace.
         transition! {
-            cap_copy()
+            cap_copy(pid: nat, dst: CapRef, src: CapRef)
             {
+                // pid must be a valid dispatcher in the KernelState
+                require pre.state.disps.contains_key(pid);
+
+                let disp = pre.state.objects.index(pre.state.disps.index(pid))->disp;
+                let local_cspace = pre.state.objects.index(disp.cspace)->l1_cnode;
+                // src must reference a valid capability in the CSpace of the dispatcher with pid
 
             }
         }
 
+
+        #[inductive(initialize)]
+        fn initialize_inductive(post: Self) { }
+
+        #[inductive(cap_copy)]
+        fn cap_copy_inductive(pre: Self, post: Self, pid: nat, dst: CapRef, src: CapRef) { }
     }
 
 }

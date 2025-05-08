@@ -6,3 +6,4 @@ mod component;
 mod dag;
 mod utils;
 mod capability;
+mod capability_userspace;
