@@ -7,3 +7,6 @@ mod dag;
 mod utils;
 mod capability;
 mod capability_userspace;
+
+// Rewrite
+mod barrelfish;

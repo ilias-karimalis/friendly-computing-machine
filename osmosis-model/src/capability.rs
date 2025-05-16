@@ -76,6 +76,16 @@ impl L1CNodeObject {
             &&& state.objects.index(kid)->cap is Null || state.objects.index(kid)->cap is L2CNode
         }
     }
+
+    //pub open spec fn l2_cnode(&self, index: nat, state: &KernelState) -> Optional<L2CNodeObject>
+    //    recommends self.wf(state)
+    //{
+    //    if (self.table.len() > index && self.table[index] is L2CNode) {
+    //        Optional::Some { some: state.objects.index(self.table[index])->l2_cnode }
+    //    } else {
+    //        Optional::None
+    //    }
+    //}
 }
 
 pub ghost struct L2CNodeObject {
@@ -93,6 +103,16 @@ impl L2CNodeObject {
             &&& state.objects.index(kid)->cap.wf(state)
         }
     }
+
+    //pub open spec fn cap(&self, index: nat, state: &KernelState) -> CapabilityObject
+    //    recommends self.wf(state)
+    //{
+    //    if (self.table.len() > index) {
+    //        state.objects.index(self.table[index])->cap
+    //    } else {
+    //        CapabilityObject::Null
+    //    }
+    //}
 }
 
 pub ghost struct DispatcherObject {
@@ -107,6 +127,18 @@ impl DispatcherObject {
         &&& state.objects.index(self.cspace) is L1CNode
         &&& state.objects.index(self.cspace)->l1_cnode.wf(state)
     }
+
+    //pub open spec fn cap(&self, capaddr: CapAddr, state: &KernelState) -> CapabilityObject
+    //    recommends self.wf(state) && capaddr.wf(state.objects.index(self.cspace)->l1_cnode)
+    //{
+    //    let l1_cnode = state.objects.index(self.cspace)->l1_cnode;
+    //    let l2_cnode = capaddr.l1(l1_cnode, state);
+    //    if (l2_cnode is Some) {
+    //        l2_cnode->some.cap(capaddr.l2, state)
+    //    } else {
+    //        CapabilityObject::Null
+    //    }
+    //}
 }
 
 // Constants defining well known Cspace locations:
@@ -178,7 +210,7 @@ impl CapAddr {
         &&& 0 <= self.l1 <= U24_MAX
         // and must fall within the bounds of the currently allocated L1CNode
         &&& self.l1 < l1_cnode.table.len()
-        // The L2 index must fir into an 8bit value
+        // The L2 index must fit into an 8bit value
         &&& 0 <= self.l2 <= U8_MAX
     }
 
