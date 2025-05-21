@@ -44,7 +44,7 @@ pub ghost struct KernelObjectLocation {
 pub ghost enum KernelObject {
     L1CNode { l1_cnode: L1CNodeObject },
     L2CNode { l2_cnode: L2CNodeObject },
-    Dispatcher { disp: DispatcherObject },
+    Dispatcher { disp: Dispatcher },
     Capability { cap: CapabilityObject },
 }
 
@@ -115,12 +115,12 @@ impl L2CNodeObject {
     //}
 }
 
-pub ghost struct DispatcherObject {
+pub ghost struct Dispatcher {
     pub cspace: KernelObjectID,
     pub pid: nat,
 }
 
-impl DispatcherObject {
+impl Dispatcher {
     pub open spec fn wf(&self, state: &KernelState) -> bool {
         // The CSpace of a Dispatcher object must be in the Kernel and well formed
         &&& state.objects.contains_key(self.cspace)
@@ -262,7 +262,7 @@ pub ghost struct CNodeRef {
 }
 
 impl CNodeRef {
-    pub open spec fn wf(&self, disp: DispatcherObject, state: &KernelState) -> bool
+    pub open spec fn wf(&self, disp: Dispatcher, state: &KernelState) -> bool
         recommends disp.wf(state),
     {
         false
@@ -274,7 +274,7 @@ impl CNodeRef {
 //        // The root and node must both be well-formed
 //        &&& self.root.wf(disp_l1_cnode);
 //        &&& self.node.wf(disp_l1_cnode);
-//        // The root reference must be the same as the DispatcherObject L1Cnode reference
+//        // The root reference must be the same as the Dispatcher L1Cnode reference
 //        &&& root_cap_opt is Some
 //        &&& root_cap_opt->some is L1CNode 
 //        &&& root_cap_opt->some->l1_kid == disp.cspace 
@@ -288,7 +288,7 @@ impl CNodeRef {
 }
 
 // impl CNodeRef {
-//     pub open spec fn wf(&self, disp: DispatcherObject) -> bool
+//     pub open spec fn wf(&self, disp: Dispatcher) -> bool
 //         recommends
 //             disp.wf(),
 //     {
@@ -316,7 +316,7 @@ pub ghost struct CapRef {
 }
 
 impl CapRef {
-    pub open spec fn wf(&self, disp: DispatcherObject, state: &KernelState) -> bool
+    pub open spec fn wf(&self, disp: Dispatcher, state: &KernelState) -> bool
         recommends disp.wf(state),
     {
         &&& true

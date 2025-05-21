@@ -125,12 +125,12 @@ verus! {
     ///////////////////////////////////////////////////////////////////////////
     
     /// The model representation of a Dispatcher.
-    pub ghost struct DispatcherObject {
+    pub ghost struct Dispatcher {
         /// The ID of the L1 CNode Object for this dispatcher.
         pub cspace: KernelObjectID, 
     }
 
-    impl DispatcherObject {
+    impl Dispatcher {
         pub open spec fn wf(&self, state: &CpuDriverState) -> bool {
             // The cspace of a dispatcher object must be in the kernel and well formed
             &&& state.l1_cnodes.contains_key(self.cspace)
@@ -150,12 +150,17 @@ verus! {
         pub l1_cnodes: Map<KernelObjectID, L1CNodeObject>,
         /// The set of valid L2 CNodes
         pub l2_cnodes: Map<KernelObjectID, L2CNodeObject>,
+        /// The set of dispatchers 
+        pub disps: Map<KernelObjectID, Dispatcher>
     }
 
     impl CpuDriverState {
         pub open spec fn wf(&self) -> bool {
             /// All Kernel Objects must be well formed
             &&& forall |kid: KernelObjectID| self.capabilities.contains_key(kid) ==> self.capabilities.index(kid).wf(self)
+            &&& forall |kid: KernelObjectID| self.l1_cnodes.contains_key(kid) ==> self.l1_cnodes.index(kid).wf(self)
+            &&& forall |kid: KernelObjectID| self.l2_cnodes.contains_key(kid) ==> self.l2_cnodes.index(kid).wf(self)
+            &&& forall |kid: KernelObjectID| self.disps.contains_key(kid) ==> self.disps.index(kid).wf(self)
         }
     }
 

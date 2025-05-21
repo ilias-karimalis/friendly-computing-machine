@@ -115,3 +115,29 @@ Using this model, we're able to use a
 
 - How do I model the tree like descendant properties of capabilities?
     ^ I could implement the AA tree like they do in Barrelfish.
+
+2025-05-21:
+
+Commited to writing a paper for the eurosys 26 deadline of 2025-09-26.
+The story line of the paper as of right now is as follows:
+- Once Upon a Time:
+    Operating systems provide large well-specified interfaces to users that
+    allow for the use and sharing of resources.
+- Villain:
+    These interfaces are intentionally permissive, which leads to low 
+    confidence of the exact consequences of a specific system/application
+    configuration.
+- Hero:
+    By formally specifying and modelling these interfaces, we'll enable the
+    verification of how system configurations will evolve over time.
+- Happily Ever After:
+    Applying this framework to Barrelfish has allowed us to show this set of
+    nice safety/security properties are upheld by the interfaces.
+
+What do I need to build:
+-----------------------
+- Barrelfish KPI abstract model
+- Refinement of BKPI to OSmosis
+- Proof of properties...
+
+
