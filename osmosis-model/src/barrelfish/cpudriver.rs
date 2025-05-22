@@ -5,6 +5,7 @@
 use state_machines_macros::*;
 use vstd::prelude::*;
 
+use crate::capability::{self, KernelObject};
 use crate::utils::Optional;
 use crate::barrelfish::kpi::{CapAddr, CapSlot};
 
@@ -71,15 +72,33 @@ verus! {
             &&& self.table.len() > addr.l1
         }
 
-        // Accesses the L1CNode and returns the L2CNode entry if one exists
-        pub open spec fn index(&self, addr: CapAddr, state: &CpuDriverState) -> Optional<L2CNodeObject>
-            recommends state.wf() && self.wf_access(addr)
+        /// Accesses the L1CNode and returns the KernelObjectID to the underlying capability
+        pub open spec fn index_kid(&self, addr: CapAddr) -> KernelObjectID
+            recommends self.wf_access(addr)
         {
-            let cap: CapabilityObject = state.capabilities.index(self.table.index(addr.l1));
-            if (cap is L2CNode) {
-                Optional::Some { some: state.l2_cnodes.index(cap->l2_kid) }
-            } else {
-                Optional::None
+            self.table.index(addr.l1)
+        }
+
+        /// Accesses the L1CNode and returns the Capability that resides in that slot
+        pub open spec fn index(&self, addr: CapAddr, state: &CpuDriverState) -> CapabilityObject
+            recommends state.wf() && self.wf(state) && self.wf_access(addr)
+        {
+            state.capabilities.index(self.table.index(addr.l1))
+        }
+
+        /// Updates the L1CNode with a new capability at the given address, returning the newly updated state
+        pub open spec fn update(&self, addr: CapAddr, cap: CapabilityObject, state: & CpuDriverState) -> CpuDriverState
+            recommends state.wf() && self.wf(state) && self.wf_access(addr) 
+                && self.index(addr, state) == CapabilityObject::Null
+                && cap.wf(state)
+                && cap is L2CNode
+        {
+            let kid: KernelObjectID = self.table.index(addr.l1);
+            CpuDriverState {
+                capabilities: state.capabilities.insert(kid, cap),
+                l1_cnodes: state.l1_cnodes,
+                l2_cnodes: state.l2_cnodes,
+                disps: state.disps,
             }
         }
     }
@@ -109,14 +128,35 @@ verus! {
         // Checks that CapSlot is a well formed access into this L2 Cnode
         pub open spec fn wf_access(&self, slot: CapSlot) -> bool {
             &&& slot.wf()
-            &&& self.table.len() > slot.idx
+            &&& self.table.len() > slot.slot
         }
 
-        // Accesses the L2CNode and returns the Capability that resides in that slot
-        pub open spec fn index(&self, slot: CapSlot, state: &CpuDriverState) -> CapabilityObject
-            recommends state.wf() && self.wf(state) && self.wf_access(slot)
+        /// Accesses the L2CNode and returns the KernelObjectID to the underlying capability
+        pub open spec fn index_kid(&self, addr: CapAddr) -> KernelObjectID
+            recommends self.wf_access(addr.get_slot())
         {
-            state.capabilities.index(self.table.index(slot.idx))
+            self.table.index(addr.l2)
+        }
+
+        /// Accesses the L2CNode and returns the Capability that resides in that slot
+        pub open spec fn index(&self, addr: CapAddr, state: &CpuDriverState) -> CapabilityObject
+            recommends state.wf() && self.wf(state) && self.wf_access(addr.get_slot())
+        {
+            state.capabilities.index(self.table.index(addr.l2))
+        }
+
+        /// Updates the CPUDriverState with a new capability at the given address, returning the newly updated state
+        pub open spec fn update(&self, addr: CapAddr, cap: CapabilityObject, state: & CpuDriverState) -> CpuDriverState
+            recommends state.wf() && self.wf(state) && self.wf_access(addr.get_slot()) 
+                && self.index(addr, state) == CapabilityObject::Null
+        {
+            let kid: KernelObjectID = self.table.index(addr.l2);
+            CpuDriverState {
+                capabilities: state.capabilities.insert(kid, cap),
+                l1_cnodes: state.l1_cnodes,
+                l2_cnodes: state.l2_cnodes,
+                disps: state.disps,
+            }
         }
     }
     
