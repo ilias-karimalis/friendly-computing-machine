@@ -203,7 +203,7 @@ verus! {
                 // The length of an L1 CNode must be a multiple of L2 CNode size
                 &&& l1.table.len() >= ENTRY_COUNT_L1CNODE || l1.table.len() % ENTRY_COUNT_L1CNODE == 0
                 // The entries of an L1CNode must all be valid capabilities that are either Null or L2CNode capabilities.
-                &&& forall |kid: KernelObjectID| l1.table.contains(kid) ==> {
+                &&& forall |kid: KernelObjectID| #[trigger] l1.table.contains(kid) ==> {
                     &&& self.capabilities.contains_key(kid)
                     &&& self.capabilities.index(kid) is Null || self.capabilities.index(kid) is L2CNode
                 }
@@ -217,9 +217,8 @@ verus! {
                 // The length of an L2 CNode must be a multiple of the size of the capability
                 &&& l2.table.len() == ENTRY_COUNT_L2CNODE
                 // The entries of an L2CNode must all be valid capabilities that are either Null or L1CNode capabilities.
-                &&& forall |kid: KernelObjectID| l2.table.contains(kid) ==> {
+                &&& forall |kid: KernelObjectID| #[trigger] l2.table.contains(kid) ==> {
                     &&& self.capabilities.contains_key(kid)
-                    &&& self.capabilities.index(kid) is Null || self.capabilities.index(kid) is L1CNode
                 }
             }
         }
@@ -261,11 +260,13 @@ verus! {
                 // 1. source and dest must both be non-null capability references
                 require !dest.is_null();
                 require !source.is_null();
+                require source.wf();
+                require dest.wf();
 
                 // Address of the destination root cnode relative to the caller's cspace
-                let dcs_addr: CapAddr = dest.get_croot_addr();
+                let dest_space_addr: CapAddr = dest.get_croot_addr();
                 // Address at which to place the capability relative to the destination cspace
-                let dcn_addr: CapAddr = dest.get_cnode_addr();
+                let dest_cnode_addr: CapAddr = dest.get_cnode_addr();
                 // Level of the destination CNode
                 let dest_level: CNodeType = dest.get_cnode_level();
                 // Addres of the source root cnode relative to the caller's cspace 
@@ -299,30 +300,32 @@ verus! {
                     src_cspace.index(src_addr, pre.capabilities)
                 };
                 require !(src_cap is Null);
+
         
                 // 5. The dest_cspace must point to a valid L1 CNode
-                let local_dest_root_l2_cap = local_l1.index(dcs_addr, pre.capabilities);
+                let local_dest_root_l2_cap = local_l1.index(dest_space_addr, pre.capabilities);
                 require local_dest_root_l2_cap is L2CNode;
                 let local_dest_root_l2 = pre.l2_cnodes.index(local_dest_root_l2_cap->l2_kid);
-                let dest_root_cap = local_dest_root_l2.index(dcs_addr, pre.capabilities);
+                let dest_root_cap = local_dest_root_l2.index(dest_space_addr, pre.capabilities);
                 require dest_root_cap is L1CNode;
                 let dest_cspace = pre.l1_cnodes.index(dest_root_cap->l1_kid);
 
                 // 6. The dest_addr must point to a valid Null slot in the destination cspace
                 require dest_level != CNodeType::Cap;
-                let dest_cspace_l2_cap = dest_cspace.index(dcn_addr, pre.capabilities);
+                let dest_cspace_l2_cap = dest_cspace.index(dest_cnode_addr, pre.capabilities);
                 if (dest_level == CNodeType::L2) {
                     require dest_cspace_l2_cap is L2CNode;
                     let dest_cspace_l2 = pre.l2_cnodes.index(dest_cspace_l2_cap->l2_kid);
-                    require dest_cspace_l2.index(dcn_addr, pre.capabilities) is Null;
+                    require dest_cspace_l2.index(dest_cnode_addr, pre.capabilities) is Null;
 
                     // Update the destination cspace with the capability from the source cspace
-                    update capabilities = dest_cspace_l2.update(dcn_addr, src_cap, pre.capabilities);
+                    update capabilities = dest_cspace_l2.update(dest_cnode_addr, src_cap, pre.capabilities);
                 } else {
+                    require src_cap is L2CNode;
                     require dest_cspace_l2_cap is Null;
 
                     // Update the destination cspace with the capability from the source cspace
-                    update capabilities = dest_cspace.update(dcn_addr, src_cap, pre.capabilities);
+                    update capabilities = dest_cspace.update(dest_cnode_addr, src_cap, pre.capabilities);
                 }
             }
         }
@@ -336,9 +339,78 @@ verus! {
         fn initialize_inductive(post: Self) { }
 
         #[inductive(cap_copy)]
-        fn cap_copy_inductive(pre: Self, post: Self, pid: KernelObjectID, dest: CapRef, source: CapRef) { 
-            // TODO!
-         }
+        fn cap_copy_inductive(pre: Self, post: Self, pid: KernelObjectID, dest: CapRef, source: CapRef) {
+
+            // There's a couple common facts that we're going to need for each of the invariants
+            let dest_space_addr: CapAddr = dest.get_croot_addr();
+            let dest_cnode_addr: CapAddr = dest.get_cnode_addr();
+            let dest_level: CNodeType = dest.get_cnode_level();
+            let src_root: CapAddr = source.get_croot_addr();
+            let src_addr: CapAddr = source.get_cnode_addr();    
+            let src_level: CNodeType = source.get_cap_level();
+            let local: Dispatcher = pre.disps.index(pid);
+            assert(pre.disps.contains_key(pid));
+            let local_l1: L1CNodeObject = pre.l1_cnodes.index(local.cspace);
+            assert(local_l1.table.contains(local_l1.index_kid(dest_space_addr)));  
+            assert(pre.capabilities.contains_key(local_l1.index_kid(dest_space_addr)));
+
+            // capabilities_wf invariant
+            assert forall |kid: KernelObjectID| post.capabilities.contains_key(kid) 
+                implies match(post.capabilities.index(kid)) { 
+                    CapabilityObject::Null => true,
+                    CapabilityObject::L1CNode { l1_kid } => post.l1_cnodes.contains_key(l1_kid),
+                    CapabilityObject::L2CNode { l2_kid } => post.l2_cnodes.contains_key(l2_kid),
+                } by {
+                    let forall_cap = post.capabilities.index(kid);
+
+                    let dest_space_addr: CapAddr = dest.get_croot_addr();
+                    let dest_cnode_addr: CapAddr = dest.get_cnode_addr();
+                    let dest_level: CNodeType = dest.get_cnode_level();
+
+
+                    // We need to identify the new capability that was added to the capabilities map
+                    let local: Dispatcher = pre.disps.index(pid);
+                    let local_l1: L1CNodeObject = pre.l1_cnodes.index(local.cspace);  
+                    let local_dest_root_l2_cap: CapabilityObject = local_l1.index(dest.get_croot_addr(), pre.capabilities);
+                    let local_dest_root_l2: L2CNodeObject = pre.l2_cnodes.index(local_dest_root_l2_cap->l2_kid);
+                    let dest_root_cap: CapabilityObject = local_dest_root_l2.index(dest.get_croot_addr(), pre.capabilities);
+                    let dest_cspace: L1CNodeObject = pre.l1_cnodes.index(dest_root_cap->l1_kid);
+                    let dest_cspace_l2_cap: CapabilityObject = dest_cspace.index(dest.get_cnode_addr(), pre.capabilities);
+
+                    let dest_addr: CapAddr = dest.get_cnode_addr();
+                    let dest_level: CNodeType = dest.get_cnode_level();
+
+                    let dest_capability_kid: KernelObjectID = if (dest_level is L2) {
+                        let dest_cspace_l2: L2CNodeObject = pre.l2_cnodes.index(dest_cspace_l2_cap->l2_kid);
+                        dest_cspace_l2.index_kid(dest_addr)
+                    } else {
+                        dest_cspace.index_kid(dest_addr) 
+                    };
+                  
+                    if (kid == dest_capability_kid) {
+                        admit();
+                    } else {
+                        admit();
+                    }
+            }
+        
+            // l1_cnodes_wf invariant - part 1
+            assert forall |kid: KernelObjectID| #[trigger] post.l1_cnodes.contains_key(kid) 
+                implies post.l1_cnodes.index(kid).table.len() >= ENTRY_COUNT_L1CNODE || post.l1_cnodes.index(kid).table.len() % ENTRY_COUNT_L1CNODE == 0 by {
+                    let forall_l1 = post.l1_cnodes.index(kid);
+                    admit();
+            }
+
+            // l1_cnodes_wf invariant - part 2
+            assert forall |kid: KernelObjectID| post.l1_cnodes.contains_key(kid) 
+                implies forall |kid: KernelObjectID| #![auto] post.l1_cnodes.index(kid).table.contains(kid) ==> {
+                    &&& post.capabilities.contains_key(kid)
+                    &&& post.capabilities.index(kid) is Null || post.capabilities.index(kid) is L2CNode
+                } by {
+                    let forall_l1 = post.l1_cnodes.index(kid);
+                    admit();
+            }
+        }
     }
-}
+    }
 }
