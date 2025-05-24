@@ -275,7 +275,7 @@ state_machine!
                 // The Protection Domain must exist
                 require pre.domains.contains(pd);
                 // The Protection Domain must hold the Resource 
-                require exists |he: HoldEdge| pre.holds.contains(he) && he.src() == pd && he.dst() is Resource && he.dst()->res == res;
+                require exists |he: HoldEdge| pre.holds.contains(he) && #[trigger] he.src() == pd && he.dst() is Resource && he.dst()->res == res;
                 // The Resource must not be mapped or being used to map
                 require forall |me: MapEdge| #[trigger] pre.maps.contains(me) ==> ({
                     ||| me is SpaceBacking && me->sb_dst != res
